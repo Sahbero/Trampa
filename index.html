@@ -10,13 +10,17 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; overflow-x: hidden; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        canvas { touch-action: none; pointer-events: none; }
+        .hero-gradient { background: radial-gradient(circle at center, #f5f5f4 0%, #fafaf9 100%); }
     </style>
 </head>
 <body class="bg-stone-50 text-stone-900">
@@ -25,56 +29,172 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // İkon bileşeni: CDN sürümüyle uyumlu hale getirildi
+        // İkon bileşeni
         const Icon = ({ name, size = 20, className = "" }) => {
             const iconRef = useRef(null);
-
             useEffect(() => {
                 if (window.lucide && iconRef.current) {
                     window.lucide.createIcons();
                 }
-            }, [name]);
+            }, [name, window.lucide]);
+            const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+            return <i ref={iconRef} data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></i>;
+        };
 
-            const kebabName = name
-                .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-                .toLowerCase();
+        // Scroll-Animasyonlu 3D Aparat (Halka Sorunu Giderildi)
+        const UniversalJoint3D = () => {
+            const containerRef = useRef(null);
+            const jointRef = useRef(null);
 
-            return (
-                <i 
-                    ref={iconRef}
-                    data-lucide={kebabName} 
-                    className={className}
-                    style={{ 
-                        width: size, 
-                        height: size, 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center' 
-                    }}
-                ></i>
-            );
+            useEffect(() => {
+                let scene, camera, renderer, joint;
+                const width = containerRef.current.clientWidth;
+                const height = 450;
+
+                const init = () => {
+                    scene = new THREE.Scene();
+                    camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
+                    camera.position.set(7, 5, 10);
+                    camera.lookAt(0, 0, 0);
+
+                    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                    containerRef.current.appendChild(renderer.domElement);
+
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                    scene.add(ambientLight);
+                    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                    mainLight.position.set(5, 15, 5);
+                    scene.add(mainLight);
+
+                    const metalMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.3, metalness: 0.7 });
+                    const redLeverMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.6, metalness: 0.2 });
+                    const holeMat = new THREE.MeshBasicMaterial({ color: 0x18181b });
+
+                    joint = new THREE.Group();
+
+                    // Üst Flanş (Temizlendi)
+                    const flangeGroup = new THREE.Group();
+                    const flangeGeo = new THREE.CylinderGeometry(2.3, 2.3, 0.25, 48);
+                    const flange = new THREE.Mesh(flangeGeo, metalMat);
+                    flangeGroup.add(flange);
+
+                    // 4 Delik
+                    const holeGeo = new THREE.CircleGeometry(0.18, 16);
+                    for(let i=0; i<4; i++) {
+                        const hole = new THREE.Mesh(holeGeo, holeMat);
+                        const angle = (i * Math.PI) / 2;
+                        hole.position.set(Math.cos(angle) * 1.6, 0.13, Math.sin(angle) * 1.6);
+                        hole.rotation.x = -Math.PI / 2;
+                        flangeGroup.add(hole);
+                    }
+                    flangeGroup.position.y = 2.2;
+                    joint.add(flangeGroup);
+
+                    // Vida Gövdesi (Halka Taşması Engellendi)
+                    const screwGroup = new THREE.Group();
+                    const coreGeo = new THREE.CylinderGeometry(1.15, 1.15, 3.5, 32);
+                    const core = new THREE.Mesh(coreGeo, metalMat);
+                    core.position.y = 0.5;
+                    screwGroup.add(core);
+
+                    // Dişler flanşın altında kalacak şekilde sınırlandı
+                    for(let i=0; i<13; i++) {
+                        const threadGeo = new THREE.TorusGeometry(1.25, 0.12, 12, 48);
+                        const thread = new THREE.Mesh(threadGeo, metalMat);
+                        thread.rotation.x = Math.PI / 2;
+                        thread.position.y = (i * 0.22) - 0.7;
+                        screwGroup.add(thread);
+                    }
+                    joint.add(screwGroup);
+
+                    // Alt Gövde (Daha sade)
+                    const baseGroup = new THREE.Group();
+                    const baseGeo = new THREE.CylinderGeometry(2.1, 2.1, 1.1, 48);
+                    const base = new THREE.Mesh(baseGeo, metalMat);
+                    baseGroup.add(base);
+                    baseGroup.position.y = -1.4;
+                    joint.add(baseGroup);
+
+                    // Kırmızı Kol
+                    const leverGroup = new THREE.Group();
+                    const leverGeo = new THREE.BoxGeometry(4.5, 0.55, 0.75);
+                    const lever = new THREE.Mesh(leverGeo, redLeverMat);
+                    lever.position.set(3, -1.4, 0);
+                    leverGroup.add(lever);
+                    joint.add(leverGroup);
+
+                    scene.add(joint);
+                    jointRef.current = joint;
+                    joint.scale.set(0.7, 0.7, 0.7);
+                };
+
+                const animate = () => {
+                    requestAnimationFrame(animate);
+                    renderer.render(scene, camera);
+                };
+
+                init();
+                animate();
+
+                const handleScroll = () => {
+                    const scrollY = window.scrollY;
+                    const maxScroll = 600;
+                    const factor = Math.min(scrollY / maxScroll, 1);
+
+                    if (jointRef.current) {
+                        jointRef.current.rotation.y = factor * Math.PI * 2.5;
+                        const scale = 0.7 + (factor * 0.9);
+                        jointRef.current.scale.set(scale, scale, scale);
+                    }
+                };
+
+                window.addEventListener('scroll', handleScroll);
+                return () => {
+                    window.removeEventListener('scroll', handleScroll);
+                    if (containerRef.current) containerRef.current.removeChild(renderer.domElement);
+                };
+            }, []);
+
+            return <div ref={containerRef} className="w-full h-[450px]" />;
         };
 
         const App = () => {
-            const [activeTab, setActiveTab] = useState('marketplace');
+            const [activeTab, setActiveTab] = useState('home');
+            const [joinStep, setJoinStep] = useState(0); 
+            const [selectedTop, setSelectedTop] = useState(null);
+            const [selectedLeg, setSelectedLeg] = useState(null);
             const [filterType, setFilterType] = useState(null); 
-            
-            // Mevcut kurulum verileri (Artık statik veya başlangıç verisi olarak korunuyor)
-            const [selectedTop] = useState({ id: 't1', name: 'Doğal Meşe', material: 'Masif Ahşap', color: 'bg-amber-100', image: 'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&q=80&w=200' });
-            const [selectedLeg] = useState({ id: 'l1', name: 'Endüstriyel', material: 'Mat Çelik', color: 'bg-zinc-800', image: 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&q=80&w=200' });
-            
             const [showSwapModal, setShowSwapModal] = useState(false);
             const [swapTarget, setSwapTarget] = useState(null);
-            
-            // İstatistikler
-            const [swapCount, setSwapCount] = useState(12);
 
-            const marketplaceItems = [
-                { id: 'm1', type: 'top', name: 'Carrara Mermer', owner: 'Selin Y.', material: 'Mermer', distance: '2.4 km', score: 9.2, image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=300' },
-                { id: 'm2', type: 'leg', name: 'Konik Ahşap Ayak', owner: 'Ahmet K.', material: 'Ceviz', distance: '5.1 km', score: 7.5, image: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=300' },
-                { id: 'm3', type: 'top', name: 'Geri Dönüştürülmüş Polimer', owner: 'Ece D.', material: 'Plastik Atık', distance: '0.8 km', score: 10, image: 'https://images.unsplash.com/photo-1581428982868-e410dd047a90?auto=format&fit=crop&q=80&w=300' },
-                { id: 'm4', type: 'leg', name: 'Hairpin Metal Ayak', owner: 'Can M.', material: 'Bakır Kaplama', distance: '12.0 km', score: 8.8, image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=300' },
-                { id: 'm5', type: 'top', name: 'Ham Beton Tabla', owner: 'Deniz T.', material: 'Beton', distance: '3.7 km', score: 6.4, image: 'https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?auto=format&fit=crop&q=80&w=300' },
+            // Veriler
+            const tops = [
+                { id: 't1', name: 'Doğal Meşe', mat: 'Masif', price: 3400, image: 'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&q=80&w=400' },
+                { id: 't2', name: 'Carrara Mermer', mat: 'Mermer', price: 5800, image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=400' },
+                { id: 't3', name: 'Geri Dönüştürülmüş Polimer', mat: 'Polimer', price: 2900, image: 'https://images.unsplash.com/photo-1581428982868-e410dd047a90?auto=format&fit=crop&q=80&w=400' },
+                { id: 't4', name: 'Koyu Ceviz', mat: 'Masif', price: 3900, image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&q=80&w=400' }
+            ];
+
+            const legs = [
+                { id: 'l1', name: 'Ham Çelik V', price: 1200, image: 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&q=80&w=400' },
+                { id: 'l2', name: 'Konik Meşe', price: 1800, image: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=400' },
+                { id: 'l3', name: 'Minimal Beyaz', price: 950, image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&q=80&w=400' }
+            ];
+
+            const trampaPool = [
+                { id: 'm1', type: 'top', name: 'Beyaz Kuvars', owner: 'Selin Y.', material: 'Kuvars', score: 9.8, image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=300' },
+                { id: 'm2', type: 'top', name: 'Rustik Ladin', owner: 'Emre B.', material: 'Masif', score: 8.5, image: 'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&q=80&w=300' },
+                { id: 'm3', type: 'top', name: 'Endüstriyel Cam', owner: 'Cemre K.', material: 'Temperli Cam', score: 9.1, image: 'https://images.unsplash.com/photo-1516455590571-18256e5bb9ff?auto=format&fit=crop&q=80&w=300' },
+                { id: 'm4', type: 'top', name: 'Okyanus Polimer', owner: 'Can D.', material: 'Geri Dönüştürülmüş', score: 10, image: 'https://images.unsplash.com/photo-1581428982868-e410dd047a90?auto=format&fit=crop&q=80&w=300' },
+                { id: 'm5', type: 'leg', name: 'Pirinç Silindir', owner: 'Ahmet K.', material: 'Pirinç', score: 7.5, image: 'https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?auto=format&fit=crop&q=80&w=300' },
+                { id: 'm6', type: 'leg', name: 'Antrasit Kare', owner: 'Deniz G.', material: 'Çelik', score: 8.2, image: 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=300' },
+            ];
+
+            const trampaHistory = [
+                { id: 1, date: '12 Mart 2024', item: 'Doğal Meşe Tabla', swappedFor: 'Carrara Mermer Tabla', partner: 'Selin Y.' },
+                { id: 2, date: '28 Ocak 2024', item: 'Endüstriyel Ayak', swappedFor: 'Meşe Konik Ayak', partner: 'Ahmet K.' }
             ];
 
             const handleSwapRequest = (item) => {
@@ -82,87 +202,185 @@
                 setShowSwapModal(true);
             };
 
-            const confirmSwap = () => {
-                setShowSwapModal(false);
-                setSwapCount(prev => prev + 1); 
-                const msg = document.createElement('div');
-                msg.className = "fixed top-20 left-1/2 transform -translate-x-1/2 bg-stone-900 text-white px-6 py-3 rounded-full text-xs font-bold z-[100] shadow-xl animate-bounce";
-                msg.innerText = "Takas İsteği Gönderildi!";
-                document.body.appendChild(msg);
-                setTimeout(() => msg.remove(), 3000);
+            const navigateToHome = () => {
+                setActiveTab('home');
+                setJoinStep(0);
+                window.scrollTo(0, 0);
             };
 
             return (
                 <div className="min-h-screen pb-24 overflow-x-hidden">
                     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex justify-between items-center border-b border-stone-200">
-                        <div>
+                        <div onClick={navigateToHome} className="cursor-pointer active:scale-95 transition-transform">
                             <h1 className="text-xl font-bold tracking-tighter text-stone-800">TRAMPA</h1>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest">Circular Furniture System</p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest font-medium">Circular Furniture System</p>
                         </div>
-                        <div className="bg-stone-100 p-2 rounded-full">
-                            <Icon name="RefreshCw" size={18} className="text-stone-600" />
+                        <div className="bg-stone-100 p-2 rounded-full cursor-pointer hover:bg-stone-200 transition-colors">
+                            <Icon name="Info" size={18} className="text-stone-600" />
                         </div>
                     </header>
 
-                    <main className="p-6 max-w-2xl mx-auto">
+                    <main className="max-w-2xl mx-auto">
+                        {/* TAB 0: ANASAYFA */}
+                        {activeTab === 'home' && (
+                            <div className="animate-in fade-in duration-700">
+                                <div className="p-6 text-center space-y-4">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-stone-400">Teknik Devrim</span>
+                                    <h2 className="text-4xl font-black leading-tight tracking-tight">Evrensel Bağlantı Sistemi</h2>
+                                    <p className="text-stone-500 text-sm max-w-md mx-auto italic">Tüm masa ve ayakları birbirine bağlayan, Trampa ekosisteminin kalbi.</p>
+                                    <UniversalJoint3D />
+                                </div>
+
+                                <div className="bg-white p-8 space-y-12 rounded-t-[3rem] shadow-2xl border-t border-stone-100 -mt-10 relative z-20">
+                                    <section className="space-y-6 pt-4">
+                                        <div className="w-12 h-1 bg-stone-200 rounded-full mx-auto mb-8"></div>
+                                        <div className="space-y-4">
+                                            <h3 className="text-2xl font-bold text-stone-800">Problem: Kullan-At Kültürü</h3>
+                                            <p className="text-stone-600 text-sm leading-relaxed">
+                                                Her yıl milyonlarca mobilya, sadece görüntüsünden sıkılındığı veya tek bir parçası hasar gördüğü için çöpe atılıyor. Geleneksel mobilya sektörü, sizi bütün bir ürünü almaya veya her şeyi çöpe atmaya zorlayan <strong>"doğrusal"</strong> bir yapıda işliyor. Bu durum, devasa bir karbon ayak izi ve kaynak israfı yaratıyor.
+                                            </p>
+                                        </div>
+                                    </section>
+
+                                    <section className="space-y-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-2xl font-bold text-stone-800">Çözüm: Trampa Felsefesi</h3>
+                                            <p className="text-stone-600 text-sm leading-relaxed">
+                                                Trampa, mobilyayı sabit bir nesne değil, yaşayan ve değişen bir parça olarak yeniden tanımlıyor. Geliştirdiğimiz <strong>Evrensel Aparat</strong> sayesinde, masanızın tablasını veya ayaklarını saniyeler içinde değiştirebilirsiniz. Sıkıldığınızda atmak yerine, Trampala topluluğu içinde başkalarıyla takas ederek masanızı yenileyebilirsiniz.
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="p-5 bg-green-50 rounded-[32px] space-y-2 border border-green-100">
+                                                <h4 className="font-bold text-green-800 text-sm">Dünyaya Katkı</h4>
+                                                <p className="text-[11px] text-green-700 leading-tight">Mobilya üretimindeki atığı %70 oranında azaltarak doğal kaynaklarımızı koruyoruz.</p>
+                                            </div>
+                                            <div className="p-5 bg-blue-50 rounded-[32px] space-y-2 border border-blue-100">
+                                                <h4 className="font-bold text-blue-800 text-sm">İnsanlara Katkı</h4>
+                                                <p className="text-[11px] text-blue-700 leading-tight">Sahiplik yerine paylaşımı teşvik ederek topluluk içinde güçlü bağlar kuruyoruz.</p>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="space-y-4 pb-4">
+                                        <h3 className="text-xl font-bold">Felsefemiz</h3>
+                                        <div className="bg-stone-50 p-6 rounded-[32px] border border-stone-100 italic text-stone-700 text-sm leading-relaxed text-center shadow-inner">
+                                            "Bir nesnenin ömrü, sahibinin hevesiyle sınırlı olmamalıdır. Nesneleri atmak yerine, onları topluluk içinde dönüştürmeliyiz."
+                                        </div>
+                                    </section>
+
+                                    <button 
+                                        onClick={() => setActiveTab('join')}
+                                        className="w-full py-5 bg-stone-900 text-white rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-stone-800 transition-all shadow-xl active:scale-[0.98]"
+                                    >
+                                        Aramıza Katıl
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB: JOIN (SATIN ALMA) */}
+                        {activeTab === 'join' && (
+                            <div className="p-6 space-y-8 animate-in slide-in-from-right duration-500">
+                                <div className="flex justify-between items-center px-2">
+                                    {[0, 1, 2].map((s) => (
+                                        <div key={s} className={`h-1 flex-1 mx-1 rounded-full ${joinStep >= s ? 'bg-stone-900' : 'bg-stone-200'}`} />
+                                    ))}
+                                </div>
+
+                                {joinStep === 0 && (
+                                    <div className="space-y-6">
+                                        <h2 className="text-2xl font-black text-center">Masa Tablası Seç</h2>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {tops.map(t => (
+                                                <button key={t.id} onClick={() => setSelectedTop(t)} className={`bg-white p-3 rounded-[32px] border-2 text-left transition-all ${selectedTop?.id === t.id ? 'border-stone-900 ring-4 ring-stone-900/5' : 'border-stone-100 hover:border-stone-200'}`}>
+                                                    <div className="aspect-square rounded-2xl overflow-hidden mb-3"><img src={t.image} className="w-full h-full object-cover" /></div>
+                                                    <h4 className="text-xs font-bold truncate">{t.name}</h4>
+                                                    <p className="text-[10px] text-stone-400">{t.price} ₺ (Aparat Dahil)</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button disabled={!selectedTop} onClick={() => setJoinStep(1)} className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold uppercase text-xs disabled:opacity-30">İleri</button>
+                                    </div>
+                                )}
+
+                                {joinStep === 1 && (
+                                    <div className="space-y-6 animate-in slide-in-from-right duration-300">
+                                        <h2 className="text-2xl font-black text-center">Masa Ayağı Seç</h2>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {legs.map(l => (
+                                                <button key={l.id} onClick={() => setSelectedLeg(l)} className={`bg-white p-3 rounded-[32px] border-2 text-left transition-all ${selectedLeg?.id === l.id ? 'border-stone-900 ring-4 ring-stone-900/5' : 'border-stone-100 hover:border-stone-200'}`}>
+                                                    <div className="aspect-square rounded-2xl overflow-hidden mb-3"><img src={l.image} className="w-full h-full object-cover" /></div>
+                                                    <h4 className="text-xs font-bold truncate">{l.name}</h4>
+                                                    <p className="text-[10px] text-stone-400">{l.price} ₺</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <button onClick={() => setJoinStep(0)} className="flex-1 py-4 border border-stone-200 rounded-2xl font-bold text-xs">Geri</button>
+                                            <button disabled={!selectedLeg} onClick={() => setJoinStep(2)} className="flex-[2] py-4 bg-stone-900 text-white rounded-2xl font-bold uppercase text-xs disabled:opacity-30">İleri</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {joinStep === 2 && (
+                                    <div className="space-y-8 animate-in slide-in-from-right duration-300">
+                                        <h2 className="text-2xl font-black text-center">Sipariş Özeti</h2>
+                                        <div className="bg-white rounded-[40px] border border-stone-100 overflow-hidden shadow-sm">
+                                            <div className="p-6 space-y-6">
+                                                <div className="flex items-center gap-4">
+                                                    <img src={selectedTop.image} className="w-20 h-20 rounded-2xl object-cover" />
+                                                    <div><h4 className="font-bold text-sm">{selectedTop.name}</h4><p className="text-xs text-stone-400">Üst Tabla + Aparat</p></div>
+                                                    <span className="ml-auto font-bold">{selectedTop.price} ₺</span>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <img src={selectedLeg.image} className="w-20 h-20 rounded-2xl object-cover" />
+                                                    <div><h4 className="font-bold text-sm">{selectedLeg.name}</h4><p className="text-xs text-stone-400">Ayak Takımı</p></div>
+                                                    <span className="ml-auto font-bold">{selectedLeg.price} ₺</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-stone-900 p-8 text-white">
+                                                <div className="flex justify-between items-end mb-6">
+                                                    <div><p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Toplam Ödeme</p><p className="text-4xl font-black">{selectedTop.price + selectedLeg.price} ₺</p></div>
+                                                    <Icon name="CheckCircle" className="text-green-500 mb-1" size={32} />
+                                                </div>
+                                                <button onClick={() => { setActiveTab('home'); setJoinStep(0); }} className="w-full py-4 bg-white text-stone-900 rounded-2xl font-bold uppercase text-xs active:scale-95 transition-all">Siparişi Onayla</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* TAB 1: TRAMPALA (MARKETPLACE) */}
                         {activeTab === 'marketplace' && (
-                            <div className="space-y-6 animate-in fade-in duration-500">
+                            <div className="p-6 space-y-6 animate-in fade-in duration-500">
                                 {!filterType ? (
                                     <div className="space-y-6 pt-4">
-                                        <div className="text-center mb-8">
-                                            <h2 className="text-2xl font-bold mb-2">Neyi değiştirmek istersiniz?</h2>
-                                            <p className="text-stone-500 text-sm">Takas etmek istediğiniz kategoriyi seçerek başlayın.</p>
-                                        </div>
+                                        <h2 className="text-2xl font-bold text-center">Trampalaya Başla</h2>
                                         <div className="grid grid-cols-1 gap-4">
                                             <button onClick={() => setFilterType('top')} className="group bg-white border border-stone-200 rounded-[32px] p-8 flex items-center justify-between hover:border-stone-900 transition-all shadow-sm">
-                                                <div className="text-left">
-                                                    <h3 className="text-xl font-bold">Üst Tabla</h3>
-                                                    <p className="text-stone-400 text-xs mt-1">Ahşap, mermer, kompozit...</p>
-                                                </div>
-                                                <div className="w-16 h-4 bg-stone-200 rounded-sm group-hover:bg-stone-800 transition-colors"></div>
+                                                <div className="text-left"><h3 className="text-xl font-bold">Üst Tabla</h3><p className="text-stone-400 text-xs mt-1">Yüzeyleri keşfet</p></div>
+                                                <div className="w-16 h-4 bg-stone-100 rounded-sm group-hover:bg-stone-800 transition-colors"></div>
                                             </button>
                                             <button onClick={() => setFilterType('leg')} className="group bg-white border border-stone-200 rounded-[32px] p-8 flex items-center justify-between hover:border-stone-900 transition-all shadow-sm">
-                                                <div className="text-left">
-                                                    <h3 className="text-xl font-bold">Masa Ayağı</h3>
-                                                    <p className="text-stone-400 text-xs mt-1">Metal, ahşap, döküm...</p>
-                                                </div>
-                                                <div className="flex gap-4">
-                                                    <div className="w-2 h-16 bg-stone-200 rounded-sm group-hover:bg-stone-800 transition-colors"></div>
-                                                    <div className="w-2 h-16 bg-stone-200 rounded-sm group-hover:bg-stone-800 transition-colors"></div>
-                                                </div>
+                                                <div className="text-left"><h3 className="text-xl font-bold">Masa Ayağı</h3><p className="text-stone-400 text-xs mt-1">Destekleri keşfet</p></div>
+                                                <div className="flex gap-4"><div className="w-2 h-16 bg-stone-100 rounded-sm group-hover:bg-stone-800 transition-colors"></div><div className="w-2 h-16 bg-stone-100 rounded-sm group-hover:bg-stone-800 transition-colors"></div></div>
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="space-y-6 animate-in slide-in-from-right duration-300">
                                         <div className="flex justify-between items-center">
-                                            <button onClick={() => setFilterType(null)} className="flex items-center text-xs font-bold text-stone-400 hover:text-stone-900">
-                                                <Icon name="ArrowLeft" size={16} className="mr-1" /> GERİ DÖN
-                                            </button>
-                                            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-400">
-                                                {filterType === 'top' ? 'Mevcut Tablalar' : 'Mevcut Ayaklar'}
-                                            </h2>
+                                            <button onClick={() => setFilterType(null)} className="flex items-center text-xs font-bold text-stone-400 hover:text-stone-900"><Icon name="ArrowLeft" size={16} className="mr-1" /> GERİ</button>
+                                            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-400">{filterType === 'top' ? 'Tablalar' : 'Ayaklar'}</h2>
                                         </div>
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {marketplaceItems.filter(item => item.type === filterType).map((item) => (
+                                        <div className="grid grid-cols-1 gap-4 pb-12">
+                                            {trampaPool.filter(item => item.type === filterType).map((item) => (
                                                 <div key={item.id} className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm flex h-40">
-                                                    <div className="w-40 h-full relative overflow-hidden flex-shrink-0">
-                                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                                                        <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded-full text-[10px] font-bold flex items-center">
-                                                            <Icon name="Star" size={10} className="mr-1 text-amber-400" />
-                                                            {item.score}/10
-                                                        </div>
-                                                    </div>
+                                                    <div className="w-40 h-full relative flex-shrink-0"><img src={item.image} className="w-full h-full object-cover" /></div>
                                                     <div className="p-4 flex flex-col justify-between flex-1">
-                                                        <div>
-                                                            <h3 className="font-bold text-base">{item.name}</h3>
-                                                            <p className="text-xs text-stone-500">{item.material}</p>
-                                                            <div className="flex items-center text-stone-400 mt-2">
-                                                                <Icon name="MapPin" size={12} className="mr-1" />
-                                                                <span className="text-[10px]">{item.distance}</span>
-                                                            </div>
-                                                        </div>
-                                                        <button onClick={() => handleSwapRequest(item)} className="w-full py-2 bg-stone-900 text-white text-[11px] font-bold rounded-xl uppercase tracking-wider">Takas Teklif Et</button>
+                                                        <div><h3 className="font-bold text-base">{item.name}</h3><p className="text-xs text-stone-500">{item.material} • {item.owner}</p></div>
+                                                        <button onClick={() => handleSwapRequest(item)} className="w-full py-2 bg-stone-900 text-white text-[11px] font-bold rounded-xl uppercase">Trampa İste</button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -172,128 +390,80 @@
                             </div>
                         )}
 
+                        {/* TAB 2: PROFİL */}
                         {activeTab === 'profile' && (
-                            <div className="space-y-8 animate-in fade-in duration-500">
+                            <div className="p-6 space-y-8 animate-in fade-in duration-500">
                                 <div className="flex items-center space-x-4">
-                                    <div className="w-16 h-16 rounded-full bg-stone-200 overflow-hidden border-2 border-white shadow-sm">
-                                        <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200" alt="Profil" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold">Mimar Mert Y.</h2>
-                                        <p className="text-xs text-stone-500">@mertyilmaz • Skor: 450</p>
+                                    <div className="w-16 h-16 rounded-full bg-stone-200 overflow-hidden border-2 border-white shadow-sm"><img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200" /></div>
+                                    <div><h2 className="text-lg font-bold">Mert Yılmaz</h2><p className="text-xs text-stone-500">@mertyilmaz • Skor: 450</p></div>
+                                </div>
+
+                                {/* Mevcut Konfigürasyon */}
+                                <div className="bg-white border border-stone-200 rounded-[32px] p-6 shadow-sm space-y-4">
+                                    <h3 className="font-bold text-xs uppercase tracking-wider text-stone-400 flex items-center gap-2"><Icon name="Layout" size={14} /> Mevcut Konfigürasyon</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center gap-2">
+                                            <div className="w-10 h-10 rounded-lg bg-stone-200 overflow-hidden"><img src={tops[0].image} className="w-full h-full object-cover" /></div>
+                                            <div className="truncate"><p className="text-[8px] font-bold text-stone-400 uppercase">Üst</p><p className="text-[10px] font-bold truncate">{tops[0].name}</p></div>
+                                        </div>
+                                        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center gap-2">
+                                            <div className="w-10 h-10 rounded-lg bg-stone-200 overflow-hidden"><img src={legs[0].image} className="w-full h-full object-cover" /></div>
+                                            <div className="truncate"><p className="text-[8px] font-bold text-stone-400 uppercase">Ayak</p><p className="text-[10px] font-bold truncate">{legs[0].name}</p></div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Mevcut Mobilya Kurulumu */}
-                                <div className="bg-white border border-stone-200 rounded-[32px] p-6 shadow-sm">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-sm uppercase tracking-wider text-stone-400">Mevcut Kurulum</h3>
-                                        <div className="px-2 py-1 bg-green-50 text-green-600 rounded-full text-[9px] font-black uppercase tracking-tighter">Aktif</div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center">
-                                            <div className="w-10 h-10 rounded-lg bg-stone-200 mr-3 overflow-hidden shadow-inner">
-                                                <img src={selectedTop.image} className="w-full h-full object-cover" />
+                                {/* Geçmiş Trampalar */}
+                                <div className="space-y-4">
+                                    <h3 className="font-bold text-xs uppercase tracking-wider text-stone-400 flex items-center gap-2"><Icon name="History" size={14} /> Geçmiş Trampalar</h3>
+                                    <div className="space-y-3">
+                                        {trampaHistory.map(h => (
+                                            <div key={h.id} className="bg-white p-4 rounded-3xl border border-stone-100 shadow-sm space-y-2">
+                                                <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-stone-400 uppercase">{h.date}</span><span className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-bold">Tamamlandı</span></div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="text-[11px] font-bold text-stone-700">{h.item}</div>
+                                                    <Icon name="ArrowRight" size={12} className="text-stone-300" />
+                                                    <div className="text-[11px] font-bold text-stone-900">{h.swappedFor}</div>
+                                                </div>
+                                                <p className="text-[10px] text-stone-500">{h.partner} ile takas edildi.</p>
                                             </div>
-                                            <div className="overflow-hidden">
-                                                <p className="text-[9px] font-bold text-stone-400 uppercase">Üst Tabla</p>
-                                                <p className="text-xs font-bold truncate">{selectedTop.name}</p>
-                                            </div>
-                                        </div>
-                                        <div className="p-3 bg-stone-50 rounded-2xl border border-stone-100 flex items-center">
-                                            <div className="w-10 h-10 rounded-lg bg-stone-200 mr-3 overflow-hidden shadow-inner">
-                                                <img src={selectedLeg.image} className="w-full h-full object-cover" />
-                                            </div>
-                                            <div className="overflow-hidden">
-                                                <p className="text-[9px] font-bold text-stone-400 uppercase">Masa Ayağı</p>
-                                                <p className="text-xs font-bold truncate">{selectedLeg.name}</p>
-                                            </div>
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-stone-900 p-6 rounded-[32px] text-white shadow-xl shadow-stone-200">
-                                        <h4 className="text-stone-500 text-[10px] font-bold uppercase tracking-widest mb-1">Toplam Takas</h4>
-                                        <p className="text-3xl font-black">{swapCount}</p>
-                                        <div className="mt-4 flex items-center text-[10px] text-stone-400 font-bold">
-                                            <Icon name="CheckCircle2" size={12} className="mr-1 text-green-500" />
-                                            DOĞRULANMIŞ
-                                        </div>
-                                    </div>
-                                    <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-100">
-                                        <h4 className="text-amber-800 text-[10px] font-bold uppercase tracking-widest mb-1">Trampa Skoru</h4>
-                                        <p className="text-3xl font-black text-amber-900">450</p>
-                                        <div className="mt-4 flex items-center text-[10px] text-amber-600 font-bold">
-                                            <Icon name="Sparkles" size={12} className="mr-1" />
-                                            TOP %5
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white border border-stone-200 rounded-[32px] overflow-hidden shadow-sm">
-                                    <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center">
-                                        <h3 className="font-bold text-xs uppercase tracking-wider">Geçmiş Hareketler</h3>
-                                        <Icon name="ChevronRight" size={16} className="text-stone-300" />
-                                    </div>
-                                    <div className="p-4 space-y-4">
-                                        <div className="flex items-center justify-between text-xs">
-                                            <div className="flex items-center">
-                                                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center mr-3">
-                                                    <Icon name="Repeat" size={14} className="text-stone-400" />
-                                                </div>
-                                                <span className="font-medium text-stone-600">Siyah Mermer Takası</span>
-                                            </div>
-                                            <span className="text-stone-400 font-medium">12 Mar</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <div className="flex items-center">
-                                                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center mr-3">
-                                                    <Icon name="Plus" size={14} className="text-stone-400" />
-                                                </div>
-                                                <span className="font-medium text-stone-600">Yeni Envanter: Çelik Ayak</span>
-                                            </div>
-                                            <span className="text-stone-400 font-medium">05 Mar</span>
-                                        </div>
-                                    </div>
+                                    <div className="bg-stone-900 p-6 rounded-[32px] text-white shadow-xl"><h4 className="text-stone-500 text-[10px] font-bold uppercase tracking-widest">Toplam Trampa</h4><p className="text-3xl font-black">14</p></div>
+                                    <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-100"><h4 className="text-amber-800 text-[10px] font-bold uppercase tracking-widest">Güven Skoru</h4><p className="text-3xl font-black text-amber-900">450</p></div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* Navigation Bar */}
+                    {/* Alt Navigasyon */}
                     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 px-6 py-3 flex justify-around items-center z-50">
+                        <button onClick={navigateToHome} className={`flex flex-col items-center ${activeTab === 'home' || activeTab === 'join' ? 'text-stone-900' : 'text-zinc-400'}`}>
+                            <Icon name="Home" /><span className="text-[9px] mt-1 font-bold uppercase">Anasayfa</span>
+                        </button>
                         <button onClick={() => setActiveTab('marketplace')} className={`flex flex-col items-center ${activeTab === 'marketplace' ? 'text-stone-900' : 'text-zinc-400'}`}>
-                            <Icon name="Repeat" />
-                            <span className="text-[10px] mt-1 font-medium uppercase">Takas</span>
+                            <Icon name="Repeat" /><span className="text-[9px] mt-1 font-bold uppercase">Trampala</span>
                         </button>
                         <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center ${activeTab === 'profile' ? 'text-stone-900' : 'text-zinc-400'}`}>
-                            <Icon name="User" />
-                            <span className="text-[10px] mt-1 font-medium uppercase">Profil</span>
+                            <Icon name="User" /><span className="text-[9px] mt-1 font-bold uppercase">Profil</span>
                         </button>
                     </nav>
 
-                    {/* Swap Modal */}
+                    {/* Takas Modal */}
                     {showSwapModal && (
                         <div className="fixed inset-0 z-[60] flex items-end justify-center p-4">
                             <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm" onClick={() => setShowSwapModal(false)}></div>
                             <div className="relative bg-white w-full max-w-md rounded-t-[40px] p-8 shadow-2xl animate-in slide-in-from-bottom-10 duration-300">
-                                <h3 className="text-xl font-bold text-center mb-6">Takas Teklifi</h3>
+                                <h3 className="text-xl font-bold text-center mb-6">Trampala Teklifi</h3>
                                 <div className="flex items-center justify-between mb-8 px-4">
-                                    <div className="text-center w-24">
-                                        <div className="h-20 w-20 bg-stone-100 rounded-2xl mx-auto mb-2 overflow-hidden border">
-                                            <img src={swapTarget?.image} className="w-full h-full object-cover" />
-                                        </div>
-                                        <span className="text-[10px] font-bold uppercase truncate block">{swapTarget?.name}</span>
-                                    </div>
-                                    <Icon name="Repeat" className="text-stone-400 animate-spin-slow" />
-                                    <div className="text-center w-24 border-2 border-dashed border-stone-200 rounded-2xl h-24 flex flex-col items-center justify-center">
-                                        <Icon name="Plus" className="text-stone-300" />
-                                        <span className="text-[9px] text-stone-300 font-bold mt-1">SEÇ</span>
-                                    </div>
+                                    <div className="text-center w-20"><div className="h-16 w-16 bg-stone-100 rounded-2xl mx-auto mb-2 overflow-hidden"><img src={swapTarget?.image} className="w-full h-full object-cover" /></div><span className="text-[8px] font-bold uppercase truncate block">{swapTarget?.name}</span></div>
+                                    <Icon name="Repeat" className="text-stone-400" />
+                                    <div className="text-center w-20 border-2 border-dashed border-stone-200 rounded-2xl h-16 flex flex-col items-center justify-center"><Icon name="Plus" className="text-stone-300" /></div>
                                 </div>
-                                <button onClick={confirmSwap} className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold uppercase tracking-wider shadow-lg shadow-stone-200">Teklifi Gönder</button>
+                                <button onClick={() => setShowSwapModal(false)} className="w-full py-4 bg-stone-900 text-white rounded-2xl font-bold uppercase tracking-wider">Teklifi Gönder</button>
                             </div>
                         </div>
                     )}
