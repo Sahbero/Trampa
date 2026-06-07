@@ -19,7 +19,8 @@
         body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; overflow-x: hidden; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        canvas { touch-action: none; pointer-events: none; }
+        /* Canvas'ı tam duyarlı (responsive) yapıyoruz ki sayfadan taşmasın */
+        canvas { touch-action: none; pointer-events: none; display: block; width: 100% !important; height: 100% !important; outline: none; }
         .hero-gradient { background: radial-gradient(circle at center, #f5f5f4 0%, #fafaf9 100%); }
     </style>
 </head>
@@ -41,102 +42,115 @@
             return <i ref={iconRef} data-lucide={kebabName} className={className} style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></i>;
         };
 
-        // Scroll-Animasyonlu 3D Aparat (Halka Sorunu Giderildi)
+        // Scroll-Animasyonlu 3D Aparat
         const UniversalJoint3D = () => {
             const containerRef = useRef(null);
             const jointRef = useRef(null);
 
             useEffect(() => {
-                let scene, camera, renderer, joint;
-                const width = containerRef.current.clientWidth;
-                const height = 450;
+                const container = containerRef.current;
+                if (!container) return;
 
-                const init = () => {
-                    scene = new THREE.Scene();
-                    camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
-                    camera.position.set(7, 5, 10);
-                    camera.lookAt(0, 0, 0);
+                let width = container.clientWidth;
+                let height = container.clientHeight || 450;
+                let animationFrameId;
 
-                    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                    renderer.setSize(width, height);
-                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                    containerRef.current.appendChild(renderer.domElement);
+                const scene = new THREE.Scene();
+                
+                // Kamera açısını düzeltiyoruz: Çaprazdan değil, tam karşıdan (x=0) bakacak
+                const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
+                camera.position.set(0, 4, 14); 
+                camera.lookAt(0, 0, 0);
 
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-                    scene.add(ambientLight);
-                    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-                    mainLight.position.set(5, 15, 5);
-                    scene.add(mainLight);
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                // 'false' parametresi canvas'ın CSS genişliğini bozmasını engeller, taşmayı tamamen çözer
+                renderer.setSize(width, height, false);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                container.appendChild(renderer.domElement);
 
-                    const metalMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.3, metalness: 0.7 });
-                    const redLeverMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.6, metalness: 0.2 });
-                    const holeMat = new THREE.MeshBasicMaterial({ color: 0x18181b });
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                scene.add(ambientLight);
+                const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                mainLight.position.set(5, 15, 5);
+                scene.add(mainLight);
 
-                    joint = new THREE.Group();
+                const metalMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.3, metalness: 0.7 });
+                const redLeverMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.6, metalness: 0.2 });
+                const holeMat = new THREE.MeshBasicMaterial({ color: 0x18181b });
 
-                    // Üst Flanş (Temizlendi)
-                    const flangeGroup = new THREE.Group();
-                    const flangeGeo = new THREE.CylinderGeometry(2.3, 2.3, 0.25, 48);
-                    const flange = new THREE.Mesh(flangeGeo, metalMat);
-                    flangeGroup.add(flange);
+                const joint = new THREE.Group();
 
-                    // 4 Delik
-                    const holeGeo = new THREE.CircleGeometry(0.18, 16);
-                    for(let i=0; i<4; i++) {
-                        const hole = new THREE.Mesh(holeGeo, holeMat);
-                        const angle = (i * Math.PI) / 2;
-                        hole.position.set(Math.cos(angle) * 1.6, 0.13, Math.sin(angle) * 1.6);
-                        hole.rotation.x = -Math.PI / 2;
-                        flangeGroup.add(hole);
-                    }
-                    flangeGroup.position.y = 2.2;
-                    joint.add(flangeGroup);
+                // Üst Flanş
+                const flangeGroup = new THREE.Group();
+                const flangeGeo = new THREE.CylinderGeometry(2.3, 2.3, 0.25, 48);
+                const flange = new THREE.Mesh(flangeGeo, metalMat);
+                flangeGroup.add(flange);
 
-                    // Vida Gövdesi (Halka Taşması Engellendi)
-                    const screwGroup = new THREE.Group();
-                    const coreGeo = new THREE.CylinderGeometry(1.15, 1.15, 3.5, 32);
-                    const core = new THREE.Mesh(coreGeo, metalMat);
-                    core.position.y = 0.5;
-                    screwGroup.add(core);
+                // 4 Delik
+                const holeGeo = new THREE.CircleGeometry(0.18, 16);
+                for(let i=0; i<4; i++) {
+                    const hole = new THREE.Mesh(holeGeo, holeMat);
+                    const angle = (i * Math.PI) / 2;
+                    hole.position.set(Math.cos(angle) * 1.6, 0.13, Math.sin(angle) * 1.6);
+                    hole.rotation.x = -Math.PI / 2;
+                    flangeGroup.add(hole);
+                }
+                flangeGroup.position.y = 2.2;
+                joint.add(flangeGroup);
 
-                    // Dişler flanşın altında kalacak şekilde sınırlandı
-                    for(let i=0; i<13; i++) {
-                        const threadGeo = new THREE.TorusGeometry(1.25, 0.12, 12, 48);
-                        const thread = new THREE.Mesh(threadGeo, metalMat);
-                        thread.rotation.x = Math.PI / 2;
-                        thread.position.y = (i * 0.22) - 0.7;
-                        screwGroup.add(thread);
-                    }
-                    joint.add(screwGroup);
+                // Vida Gövdesi
+                const screwGroup = new THREE.Group();
+                const coreGeo = new THREE.CylinderGeometry(1.15, 1.15, 3.5, 32);
+                const core = new THREE.Mesh(coreGeo, metalMat);
+                core.position.y = 0.5;
+                screwGroup.add(core);
 
-                    // Alt Gövde (Daha sade)
-                    const baseGroup = new THREE.Group();
-                    const baseGeo = new THREE.CylinderGeometry(2.1, 2.1, 1.1, 48);
-                    const base = new THREE.Mesh(baseGeo, metalMat);
-                    baseGroup.add(base);
-                    baseGroup.position.y = -1.4;
-                    joint.add(baseGroup);
+                // Dişler
+                for(let i=0; i<13; i++) {
+                    const threadGeo = new THREE.TorusGeometry(1.25, 0.12, 12, 48);
+                    const thread = new THREE.Mesh(threadGeo, metalMat);
+                    thread.rotation.x = Math.PI / 2;
+                    thread.position.y = (i * 0.22) - 0.7;
+                    screwGroup.add(thread);
+                }
+                joint.add(screwGroup);
 
-                    // Kırmızı Kol
-                    const leverGroup = new THREE.Group();
-                    const leverGeo = new THREE.BoxGeometry(4.5, 0.55, 0.75);
-                    const lever = new THREE.Mesh(leverGeo, redLeverMat);
-                    lever.position.set(3, -1.4, 0);
-                    leverGroup.add(lever);
-                    joint.add(leverGroup);
+                // Alt Gövde
+                const baseGroup = new THREE.Group();
+                const baseGeo = new THREE.CylinderGeometry(2.1, 2.1, 1.1, 48);
+                const base = new THREE.Mesh(baseGeo, metalMat);
+                baseGroup.add(base);
+                baseGroup.position.y = -1.4;
+                joint.add(baseGroup);
 
-                    scene.add(joint);
-                    jointRef.current = joint;
-                    joint.scale.set(0.7, 0.7, 0.7);
-                };
+                // Kırmızı Kol
+                const leverGroup = new THREE.Group();
+                const leverGeo = new THREE.BoxGeometry(4.5, 0.55, 0.75);
+                const lever = new THREE.Mesh(leverGeo, redLeverMat);
+                lever.position.set(3, -1.4, 0);
+                leverGroup.add(lever);
+                joint.add(leverGroup);
+
+                scene.add(joint);
+                jointRef.current = joint;
+                joint.scale.set(0.7, 0.7, 0.7);
 
                 const animate = () => {
-                    requestAnimationFrame(animate);
+                    animationFrameId = requestAnimationFrame(animate);
                     renderer.render(scene, camera);
                 };
-
-                init();
                 animate();
+
+                // Ekran yeniden boyutlandırma yönetimi (Responsive fix)
+                const handleResize = () => {
+                    if (!container) return;
+                    const newWidth = container.clientWidth;
+                    const newHeight = container.clientHeight || 450;
+                    camera.aspect = newWidth / newHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(newWidth, newHeight, false);
+                };
+                window.addEventListener('resize', handleResize);
 
                 const handleScroll = () => {
                     const scrollY = window.scrollY;
@@ -149,11 +163,16 @@
                         jointRef.current.scale.set(scale, scale, scale);
                     }
                 };
-
                 window.addEventListener('scroll', handleScroll);
+
                 return () => {
+                    window.removeEventListener('resize', handleResize);
                     window.removeEventListener('scroll', handleScroll);
-                    if (containerRef.current) containerRef.current.removeChild(renderer.domElement);
+                    cancelAnimationFrame(animationFrameId);
+                    if (container && renderer.domElement && container.contains(renderer.domElement)) {
+                        container.removeChild(renderer.domElement);
+                    }
+                    renderer.dispose();
                 };
             }, []);
 
@@ -214,7 +233,7 @@
                     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex justify-between items-center border-b border-stone-200">
                         <div onClick={navigateToHome} className="cursor-pointer active:scale-95 transition-transform">
                             <h1 className="text-xl font-bold tracking-tighter text-stone-800">TRAMPA</h1>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest font-medium">Cırcular Furnıture System</p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest font-medium">Circular Furniture System</p>
                         </div>
                         <div className="bg-stone-100 p-2 rounded-full cursor-pointer hover:bg-stone-200 transition-colors">
                             <Icon name="Info" size={18} className="text-stone-600" />
