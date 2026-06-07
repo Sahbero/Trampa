@@ -171,26 +171,26 @@
 
             // Veriler
             const tops = [
-                { id: 't1', name: 'Doğal Meşe', mat: 'Masif', price: 3400, image: 'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&q=80&w=400' },
-                { id: 't2', name: 'Carrara Mermer', mat: 'Mermer', price: 5800, image: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=400' },
-                { id: 't3', name: 'Geri Dönüştürülmüş Polimer', mat: 'Polimer', price: 2900, image: 'https://images.unsplash.com/photo-1581428982868-e410dd047a90?auto=format&fit=crop&q=80&w=400' },
-                { id: 't4', name: 'Koyu Ceviz', mat: 'Masif', price: 3900, image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&q=80&w=400' }
+                { id: 't1', name: 'Doğal Meşe', mat: 'Masif', price: 3400, image: './images/meşe.jpg' },
+                { id: 't2', name: 'Carrara Mermer', mat: 'Mermer', price: 5800, image: './images/calcata.jpg' },
+                { id: 't3', name: 'Metropol Mermer', mat: 'Polimer', price: 2900, image: './images/metropol.jpg' },
+                { id: 't4', name: 'Koyu Ceviz', mat: 'Masif', price: 3900, image: './images/ceviz.jpg' }
             ];
 
             const legs = [
-                { id: 'l1', name: 'Ham Çelik V', price: 1200, image: 'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&q=80&w=400' },
-                { id: 'l2', name: 'Konik Meşe', price: 1800, image: 'https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&q=80&w=400' },
-                { id: 'l3', name: 'Minimal Beyaz', price: 950, image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&q=80&w=400' }
+                { id: 'l1', name: 'V', price: 1200, image: './images/v.jpg' },
+                { id: 'l2', name: 'Konik Ceviz', price: 1800, image: './images/silindir.jpg' },
+                { id: 'l3', name: 'Mavi Akrilik', price: 950, image: './images/akrilik.jpg' }
             ];
 
             const trampaPool = [
-                { id: 'm1', type: 'top', name: 'Beyaz Kuvars', owner: 'Selin Y.', material: 'Kuvars', score: 9.8, image: './images/calcata.jpg' },
-                { id: 'm2', type: 'top', name: 'Meşe Ahşap', owner: 'Emre B.', material: 'Masif Ahşap', score: 8.5, image: './images/meşe.jpg' },
+                { id: 'm1', type: 'top', name: 'Carrara Mermer', owner: 'Selin Y.', material: 'Mermer', score: 9.8, image: './images/calcata.jpg' },
+                { id: 'm2', type: 'top', name: 'Doğal Meşe', owner: 'Emre B.', material: 'Masif Ahşap', score: 8.5, image: './images/meşe.jpg' },
                 { id: 'm3', type: 'top', name: 'Metropol Mermer', owner: 'Cemre K.', material: 'Mermer', score: 9.1, image: './images/metropol.jpg' },
-                { id: 'm4', type: 'top', name: 'Ceviz Ahşap', owner: 'Can D.', material: 'Masif Ahşap', score: 10, image: './images/ceviz.jpg' },
+                { id: 'm4', type: 'top', name: 'Koyu Ceviz', owner: 'Can D.', material: 'Masif Ahşap', score: 10, image: './images/ceviz.jpg' },
                 { id: 'm5', type: 'leg', name: 'Mavi Akrilik', owner: 'Ahmet K.', material: 'Akrilik', score: 7.5, image: './images/akrilik.jpg' },
                 { id: 'm6', type: 'leg', name: 'V', owner: 'Deniz G.', material: 'Çelik', score: 8.2, image: './images/v.jpg' },
-                { id: 'm7', type: 'leg', name: 'Silindirik Ceviz', owner: 'Ali B.', material: 'Ahşap Kaplama', score: 9.5, image: './images/silindir.jpg' },
+                { id: 'm7', type: 'leg', name: 'Konik Ceviz', owner: 'Ali B.', material: 'Ahşap Kaplama', score: 9.5, image: './images/silindir.jpg' },
             ];
 
             const trampaHistory = [
@@ -214,7 +214,7 @@
                     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex justify-between items-center border-b border-stone-200">
                         <div onClick={navigateToHome} className="cursor-pointer active:scale-95 transition-transform">
                             <h1 className="text-xl font-bold tracking-tighter text-stone-800">TRAMPA</h1>
-                            <p className="text-[10px] text-stone-500 uppercase tracking-widest font-medium">Circular Furniture System</p>
+                            <p className="text-[10px] text-stone-500 uppercase tracking-widest font-medium">Cırcular Furnıture System</p>
                         </div>
                         <div className="bg-stone-100 p-2 rounded-full cursor-pointer hover:bg-stone-200 transition-colors">
                             <Icon name="Info" size={18} className="text-stone-600" />
